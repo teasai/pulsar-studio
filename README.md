@@ -5,6 +5,12 @@ A cross-platform Apache Pulsar management desktop client written in Rust (egui/e
 
 ![icon](assets/app.png)
 
+![Pulsar Studio 界面](docs/screenshot.png)
+
+<p align="center">
+  <sub>深色主题 · 三级资源树 · 消息列表 / 内容 / 详情三栏 · 全库搜索</sub>
+</p>
+
 ## 功能
 
 **连接**
