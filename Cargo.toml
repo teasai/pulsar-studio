@@ -3,6 +3,8 @@ name = "pulsar-studio"
 version = "0.11.5"
 edition = "2021"
 description = "A cross-platform Apache Pulsar management desktop client"
+license = "UNLICENSED"
+repository = "https://github.com/teasai/pulsar-studio"
 
 [build-dependencies]
 winresource = "0.1"
@@ -34,3 +36,25 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 opt-level = 2
 lto = "thin"
 strip = true
+
+# ---- .deb（cargo-deb）----
+[package.metadata.deb]
+maintainer = "teasai <teasai@foxmail.com>"
+copyright = "2026, teasai"
+extended-description = "Apache Pulsar management desktop client (resources, topics, messages, subscriptions, policies)"
+section = "utility"
+priority = "optional"
+depends = "$auto, libxkbcommon0, libwayland-client0"
+assets = [
+    ["target/release/pulsar-studio", "usr/bin/", "755"],
+    ["assets/app.png", "usr/share/icons/hicolor/256x256/apps/pulsar-studio.png", "644"],
+    ["pulsar-studio.desktop", "usr/share/applications/", "644"],
+]
+
+# ---- .rpm（cargo-generate-rpm）----
+[package.metadata.generate-rpm]
+assets = [
+    { source = "target/release/pulsar-studio", dest = "/usr/bin/pulsar-studio", mode = "755" },
+    { source = "assets/app.png", dest = "/usr/share/icons/hicolor/256x256/apps/pulsar-studio.png", mode = "644" },
+    { source = "pulsar-studio.desktop", dest = "/usr/share/applications/pulsar-studio.desktop", mode = "644" },
+]

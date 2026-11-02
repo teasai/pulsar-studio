@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Pulsar Studio
+GenericName=Apache Pulsar Client
+Comment=Apache Pulsar management desktop client
+Exec=pulsar-studio
+Icon=pulsar-studio
+Terminal=false
+Categories=Development;Utility;
+Keywords=pulsar;apache;kafka;messaging;
+StartupWMClass=pulsar-studio

@@ -1,0 +1,143 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ---------------- Windows ----------------
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          $ver = "${{ github.ref_name }}"
+          Copy-Item target/release/pulsar-studio.exe dist/
+          Compress-Archive -Path dist/pulsar-studio.exe `
+            -DestinationPath "dist/PulsarStudio-$ver-windows-x64-portable.zip" -Force
+          Get-ChildItem dist | Select-Object Name,Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: win
+          path: dist/*.zip
+
+  # ---------------- Linux ----------------
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: System dependencies (egui / native-tls)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libssl-dev \
+            libx11-dev libxi-dev libxcursor-dev libxrandr-dev \
+            libgl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-dev \
+            libwayland-dev wayland-protocols libfontconfig1-dev
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install packaging tools
+        run: |
+          cargo install cargo-deb --locked || cargo install cargo-deb
+          cargo install cargo-generate-rpm --locked || cargo install cargo-generate-rpm
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Package
+        run: |
+          set -eux
+          ver="${GITHUB_REF_NAME}"
+          mkdir -p dist
+          cp target/release/pulsar-studio dist/
+          tar -C dist -czf "dist/PulsarStudio-${ver}-linux-x64.tar.gz" pulsar-studio
+          cargo deb --no-build --output dist/
+          cargo generate-rpm --output dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            dist/*.tar.gz
+            dist/*.deb
+            dist/*.rpm
+
+  # ---------------- macOS ----------------
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Package
+        run: |
+          set -eux
+          ver="${GITHUB_REF_NAME}"
+          arch="$(uname -m)"
+          mkdir -p dist
+          cp target/release/pulsar-studio dist/
+          tar -C dist -czf "dist/PulsarStudio-${ver}-macos-${arch}.tar.gz" pulsar-studio
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/*.tar.gz
+
+  # ---------------- Release ----------------
+  publish:
+    needs: [windows, linux, macos]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List
+        run: ls -lh dist
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true
