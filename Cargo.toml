@@ -3,7 +3,7 @@ name = "pulsar-studio"
 version = "0.11.6"
 edition = "2021"
 description = "A cross-platform Apache Pulsar management desktop client"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/teasai/pulsar-studio"
 
 [build-dependencies]
