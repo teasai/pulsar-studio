@@ -7,3 +7,4 @@ smoke*.err
 smoke*.json
 *.exe
 .DS_Store
+docs/DEVELOPMENT.md
