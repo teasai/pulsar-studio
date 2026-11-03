@@ -3,6 +3,7 @@ name: release
 on:
   push:
     tags: ["v*"]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -91,9 +92,21 @@ jobs:
             dist/*.deb
             dist/*.rpm
 
-  # ---------------- macOS ----------------
+  # ---------------- macOS (arm64 + Intel) ----------------
   macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            arch: arm64
+          - target: x86_64-apple-darwin
+            arch: x86_64
     runs-on: macos-latest
+    env:
+      # 交叉编译 C 依赖（zstd / lz4）时指定目标架构
+      CC_x86_64_apple_darwin: clang
+      CFLAGS_x86_64_apple_darwin: -arch x86_64
     steps:
       - uses: actions/checkout@v4
 
@@ -102,23 +115,28 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Add rust target
+        run: rustup target add ${{ matrix.target }}
+
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
 
       - name: Build
-        run: cargo build --release
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Package
         run: |
           set -eux
           ver="${GITHUB_REF_NAME}"
-          arch="$(uname -m)"
           mkdir -p dist
-          cp target/release/pulsar-studio dist/
-          tar -C dist -czf "dist/PulsarStudio-${ver}-macos-${arch}.tar.gz" pulsar-studio
+          cp target/${{ matrix.target }}/release/pulsar-studio dist/
+          tar -C dist -czf "dist/PulsarStudio-${ver}-macos-${{ matrix.arch }}.tar.gz" pulsar-studio
+          file dist/pulsar-studio
 
       - uses: actions/upload-artifact@v4
         with:
-          name: macos
+          name: macos-${{ matrix.arch }}
           path: dist/*.tar.gz
 
   # ---------------- Release ----------------
