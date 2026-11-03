@@ -1,7 +1,7 @@
 # Pulsar Studio
 
 [![release](https://github.com/teasai/pulsar-studio/actions/workflows/release.yml/badge.svg)](https://github.com/teasai/pulsar-studio/actions/workflows/release.yml)
-[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 [![platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](#下载)
 
 A cross-platform Apache Pulsar management desktop client written in Rust (egui/eframe).
@@ -115,4 +115,13 @@ cargo run --bin smoke
 
 ## License
 
-[MIT](LICENSE) © 2026 teasai
+Licensed under either of the following, at your option:
+
+- [MIT License](LICENSE)
+- [Apache License, Version 2.0](LICENSE-APACHE)
+
+## 声明
+
+本项目为独立开发的开源项目，与 Apache 软件基金会（ASF）无隶属关系，亦未获其背书。
+
+Apache Pulsar、Apache、Pulsar 是 Apache 软件基金会的商标。
