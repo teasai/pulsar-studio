@@ -1,7 +1,24 @@
 # Pulsar Studio
 
+[![release](https://github.com/teasai/pulsar-studio/actions/workflows/release.yml/badge.svg)](https://github.com/teasai/pulsar-studio/actions/workflows/release.yml)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](#下载)
+
 A cross-platform Apache Pulsar management desktop client written in Rust (egui/eframe).
 纯 Rust 实现的 Apache Pulsar 图形化管理客户端，单文件可执行，无运行时依赖。
+
+## 下载
+
+到 [Releases](https://github.com/teasai/pulsar-studio/releases) 选择对应平台：
+
+| 平台 | 文件 |
+|---|---|
+| Windows | `PulsarStudio-*-windows-x64-portable.zip`（解压即用）、`PulsarStudio-Setup-*.exe`（安装版） |
+| Linux (Debian/Ubuntu) | `pulsar-studio_*_amd64.deb` |
+| Linux (RHEL/CentOS) | `pulsar-studio-*.x86_64.rpm` |
+| Linux (通用) | `PulsarStudio-*-linux-x64.tar.gz` |
+| macOS Apple Silicon | `PulsarStudio-*-macos-arm64.tar.gz` |
+| macOS Intel | `PulsarStudio-*-macos-x86_64.tar.gz` |
 
 ![icon](assets/app.png)
 
@@ -98,4 +115,4 @@ cargo run --bin smoke
 
 ## License
 
-未指定。如需开源请自行添加 LICENSE。
+[MIT](LICENSE) © 2026 teasai
