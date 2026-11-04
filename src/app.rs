@@ -274,6 +274,8 @@ pub struct PulsarStudio {
     storage: Option<crate::model::StorageSummary>,
     new_tenant_roles: String,
     tree_filter: String,
+    /// 已在资源树里触发过全库搜索的关键字；为空表示只做本地过滤
+    tree_search_term: String,
     new_topic_partitions: String,
     sub_create_dialog: bool,
     new_sub_name: String,
@@ -408,6 +410,7 @@ impl PulsarStudio {
             storage: None,
             new_tenant_roles: String::new(),
             tree_filter: String::new(),
+            tree_search_term: String::new(),
             new_topic_partitions: String::new(),
             sub_create_dialog: false,
             new_sub_name: String::new(),
@@ -785,7 +788,12 @@ impl PulsarStudio {
     }
 
     fn load_topics(&mut self, ns: NamespaceRef) {
+        let key = ns.full();
+        if self.topics_pending.contains(&key) {
+            return;
+        }
         let Some(admin) = self.admin.clone() else { return };
+        self.topics_pending.push(key);
         let tx = self.tx.clone();
         let ctx = self.ctx.clone();
         self.busy += 1;
@@ -799,6 +807,34 @@ impl PulsarStudio {
             let _ = tx.send(Event::Topics { ns, list });
             ctx.request_repaint();
         });
+    }
+
+    /// 资源树搜索：拉取所有租户的命名空间，以及各命名空间下的 Topic，
+    /// 让「过滤资源」能真正按 Topic 名跨命名空间查找。
+    fn tree_search_all(&mut self) {
+        let needle = self.tree_filter.trim().to_lowercase();
+        if needle.len() < 2 {
+            return;
+        }
+        self.tree_search_term = needle;
+        for tenant in self.tenants.clone() {
+            match self.ns_cache.get(&tenant).cloned() {
+                Some(list) => {
+                    for full in list {
+                        if self.topics_cache.contains_key(&full) {
+                            continue;
+                        }
+                        let parts: Vec<&str> = full.split('/').collect();
+                        let ns = NamespaceRef::new(
+                            parts.first().copied().unwrap_or(""),
+                            parts.get(1).copied().unwrap_or(""),
+                        );
+                        self.load_topics(ns);
+                    }
+                }
+                None => self.load_namespaces(tenant),
+            }
+        }
     }
 
     fn load_topic_detail(&mut self, topic: TopicEntry) {
@@ -1548,6 +1584,20 @@ impl PulsarStudio {
                     } else {
                         None
                     };
+                    // 全库搜索期间，继续把该租户下各命名空间的 Topic 拉进来
+                    if !self.tree_search_term.is_empty() {
+                        for full in &list {
+                            if self.topics_cache.contains_key(full) {
+                                continue;
+                            }
+                            let parts: Vec<&str> = full.split('/').collect();
+                            let ns = NamespaceRef::new(
+                                parts.first().copied().unwrap_or(""),
+                                parts.get(1).copied().unwrap_or(""),
+                            );
+                            self.load_topics(ns);
+                        }
+                    }
                     self.ns_cache.insert(tenant, list);
                     if let Some(full) = auto_pick {
                         let parts: Vec<&str> = full.split('/').collect();
@@ -2019,11 +2069,22 @@ impl PulsarStudio {
                         want_new_ns = true;
                     }
                 });
-                ui.add(
+                let filter_resp = ui.add(
                     egui::TextEdit::singleline(&mut self.tree_filter)
-                        .hint_text(i18n::t(lang, "过滤资源", "篩選資源", "Filter resources"))
+                        .hint_text(i18n::t(
+                            lang,
+                            "过滤资源（回车搜全库）",
+                            "篩選資源（Enter 搜全庫）",
+                            "Filter (Enter = search all)",
+                        ))
                         .desired_width(f32::INFINITY),
                 );
+                if filter_resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                    self.tree_search_all();
+                }
+                if filter_resp.changed() && self.tree_filter.trim().is_empty() {
+                    self.tree_search_term.clear();
+                }
                 ui.separator();
 
                 egui::ScrollArea::vertical()
@@ -2038,12 +2099,48 @@ impl PulsarStudio {
                             );
                             return;
                         }
+                        let needle = self.tree_filter.trim().to_lowercase();
+                        let mut shown = 0usize;
                         for tenant in self.tenants.clone() {
-                            let resp = egui::CollapsingHeader::new(format!("🏢 {tenant}"))
-                                .id_salt(format!("tenant-{tenant}"))
-                                .show(ui, |ui| {
-                                    let loaded = self.ns_cache.contains_key(&tenant);
-                                    if !loaded {
+                            let tenant_match =
+                                !needle.is_empty() && tenant.to_lowercase().contains(&needle);
+                            let ns_loaded = self.ns_cache.contains_key(&tenant);
+                            // 该租户下要显示的命名空间：名字命中，或其中已加载的 Topic 命中
+                            let mut visible_ns: Vec<String> = Vec::new();
+                            if let Some(list) = self.ns_cache.get(&tenant) {
+                                for full in list {
+                                    if needle.is_empty()
+                                        || tenant_match
+                                        || full.to_lowercase().contains(needle.as_str())
+                                    {
+                                        visible_ns.push(full.clone());
+                                        continue;
+                                    }
+                                    if let Some(topics) = self.topics_cache.get(full) {
+                                        if topics
+                                            .iter()
+                                            .any(|t| t.local_name.to_lowercase().contains(needle.as_str()))
+                                        {
+                                            visible_ns.push(full.clone());
+                                        }
+                                    }
+                                }
+                            }
+                            // 已加载却没有任何命中：过滤时整条分支隐藏
+                            if !needle.is_empty() && ns_loaded && visible_ns.is_empty() {
+                                continue;
+                            }
+                            let force_open =
+                                !needle.is_empty() && (tenant_match || !visible_ns.is_empty());
+                            let header = egui::CollapsingHeader::new(format!("🏢 {tenant}"))
+                                .id_salt(format!("tenant-{tenant}"));
+                            let header = if force_open {
+                                header.open(Some(true))
+                            } else {
+                                header
+                            };
+                            let resp = header.show(ui, |ui| {
+                                    if !ns_loaded {
                                         ui.horizontal(|ui| {
                                             ui.spinner();
                                             ui.label(i18n::t(
@@ -2051,16 +2148,8 @@ impl PulsarStudio {
                                             ));
                                         });
                                         to_load.push(tenant.clone());
-                                    } else if let Some(list) = self.ns_cache.get(&tenant).cloned() {
-                                        let needle = self.tree_filter.to_lowercase();
-                                        let list: Vec<String> = list
-                                            .into_iter()
-                                            .filter(|f| {
-                                                needle.is_empty()
-                                                    || f.to_lowercase().contains(&needle)
-                                            })
-                                            .collect();
-                                        if list.is_empty() {
+                                    } else {
+                                        if visible_ns.is_empty() && needle.is_empty() {
                                             ui.label(
                                                 egui::RichText::new(i18n::t(
                                                     lang,
@@ -2071,7 +2160,7 @@ impl PulsarStudio {
                                                 .weak(),
                                             );
                                         }
-                                        for full in list {
+                                        for full in visible_ns.clone() {
                                             let parts: Vec<&str> = full.split('/').collect();
                                             let ns = NamespaceRef::new(
                                                 parts.first().copied().unwrap_or(""),
@@ -2081,12 +2170,21 @@ impl PulsarStudio {
                                             let ns_sel = self.selected_ns.as_ref() == Some(&ns);
                                             let auto =
                                                 self.auto_expand.as_deref() == Some(ns_key.as_str());
+                                            // 过滤时：命名空间名命中则显示其全部 Topic，否则只显示命中的 Topic
+                                            let ns_match = needle.is_empty()
+                                                || tenant_match
+                                                || full.to_lowercase().contains(needle.as_str());
                                             let header = egui::CollapsingHeader::new(format!(
                                                 "📁 {}",
                                                 ns.namespace
                                             ))
                                             .id_salt(format!("ns-{ns_key}"))
                                             .default_open(auto);
+                                            let header = if needle.is_empty() {
+                                                header
+                                            } else {
+                                                header.open(Some(true))
+                                            };
                                             let resp = header.show(ui, |ui| {
                                                 if !self.topics_cache.contains_key(&ns_key) {
                                                     ui.horizontal(|ui| {
@@ -2115,14 +2213,12 @@ impl PulsarStudio {
                                                             .weak(),
                                                         );
                                                     }
-                                                    let topic_needle =
-                                                        self.tree_filter.to_lowercase();
                                                     for t in list {
-                                                        if !topic_needle.is_empty()
+                                                        if !ns_match
                                                             && !t
                                                                 .local_name
                                                                 .to_lowercase()
-                                                                .contains(&topic_needle)
+                                                                .contains(needle.as_str())
                                                         {
                                                             continue;
                                                         }
@@ -2222,9 +2318,20 @@ impl PulsarStudio {
                             if header_clicked && !self.ns_cache.contains_key(&tenant) {
                                 to_load.push(tenant.clone());
                             }
+                            shown += 1;
                         }
                         if self.tenants.is_empty() {
                             ui.label(egui::RichText::new("没有租户，检查连接或权限").weak());
+                        } else if shown == 0 {
+                            ui.label(
+                                egui::RichText::new(i18n::t(
+                                    lang,
+                                    "无匹配项",
+                                    "無相符項目",
+                                    "No matches",
+                                ))
+                                .weak(),
+                            );
                         }
                     });
             });
