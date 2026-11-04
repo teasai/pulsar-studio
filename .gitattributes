@@ -1,0 +1,6 @@
+# 统一换行：仓库与工作区一律 LF，避免跨平台伪 diff
+* text=auto eol=lf
+
+# 二进制资源不做换行转换
+*.png binary
+*.ico binary
