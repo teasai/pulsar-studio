@@ -5167,7 +5167,13 @@ impl eframe::App for PulsarStudio {
             ui.horizontal(|ui| {
                 ui.label(&self.status).on_hover_text(&self.status);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(egui::RichText::new("Pulsar Studio 0.11.6").weak());
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "Pulsar Studio {}",
+                            env!("CARGO_PKG_VERSION")
+                        ))
+                        .weak(),
+                    );
                 });
             });
         });
