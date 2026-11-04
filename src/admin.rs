@@ -204,9 +204,24 @@ impl AdminClient {
     }
 
     pub async fn delete_topic(&self, topic: &TopicEntry) -> Result<()> {
-        let path = format!("/admin/v2/{}?force=true", topic.admin_path());
-        self.send(Method::DELETE, &path, None).await?;
-        Ok(())
+        let base = format!("/admin/v2/{}", topic.admin_path());
+        match self
+            .send(Method::DELETE, &format!("{base}?force=true"), None)
+            .await
+        {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                // 分区 Topic 的逻辑名不是真实 topic，直接 DELETE 会 404；
+                // 正确做法是删掉 /partitions 定义，broker 会一并清理各分区。
+                if e.to_string().contains("404") {
+                    self.send(Method::DELETE, &format!("{base}/partitions?force=true"), None)
+                        .await?;
+                    Ok(())
+                } else {
+                    Err(e)
+                }
+            }
+        }
     }
 }
 
